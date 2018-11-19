@@ -14,6 +14,8 @@ var map = new Map(2000,2000);//,[new Tree([1000,1000],200)]);
 
 var player = new Player([map.width/2,map.height/2],50,3);
 
+var mouseLocation = [110, 0];
+
 const resourceMap = ["Wood"];//Which resources are available. Same order as the resources are stored in player
 
 var keystates = [false,false,false,false];//If key is pressed. Left, Right, Up, and Down keys respectively
@@ -89,18 +91,30 @@ function ruleTwo(minionNum) { //Separation from other Minions
 
 //USER INPUT
 
+function mouseMove(event) {
+	mouseLocation[0] = event.clientX;
+	mouseLocation[1] = event.clientY;
+}
+
+function keyPress(event) {
+	let key = event.which || event.keyCode;
+	if (key == 32 && player.minions.length <= 100) {
+		player.minions.push(new Minion(vectorAdd(player.pos,[Math.random(),Math.random()]), "green"));
+	}		
+}
+
 function keyDown(event) {
 	let key = event.which || event.keyCode;
-	if (key == 37 && keystates[0]==false) { //Left arrow key
+	if ((key == 37 && keystates[0]==false) || (key == 65 && keystates[0] == false)) { //Left arrow key
 		player.vel[0] -= 1;
 		keystates[0] = true;
-	} else if (key == 39 && keystates[1]==false) { //Right arrow key
+	} else if ((key == 39 && keystates[1]==false) || (key == 68 && keystates[1] == false)) { //Right arrow key
 		player.vel[0] += 1;
 		keystates[1] = true;
-	} else if (key == 38 && keystates[2]==false) { //Up arrow key
+	} else if ((key == 38 && keystates[2]==false) || (key == 87 && keystates[2] == false)) { //Up arrow key
 		player.vel[1] -= 1;
 		keystates[2] = true;
-	} else if (key == 40 && keystates[3]==false) { //Down arrow key
+	} else if ((key == 40 && keystates[3]==false) || (key == 83 && keystates[3] == false)) { //Down arrow key
 		player.vel[1] += 1;
 		keystates[3] = true;
 	}
@@ -108,16 +122,16 @@ function keyDown(event) {
 
 function keyUp(event) {
 	let key = event.which || event.keyCode;
-	if (key == 37 && keystates[0]==true) { //Left arrow key. The keystates check is left in to stop unusual movement if the user loaded the page already pressing an arrow key
+	if ((key == 37 && keystates[0]==true) || (key == 65 && keystates[0] == true)) { //Left arrow key. The keystates check is left in to stop unusual movement if the user loaded the page already pressing an arrow key
 		player.vel[0] += 1;
 		keystates[0] = false;
-	} else if (key == 39 && keystates[1]==true) { //Right arrow key
+} else if ((key == 39 && keystates[1]==true) || (key == 68 && keystates[1] == true)) { //Right arrow key
 		player.vel[0] -= 1;
 		keystates[1] = false;
-	} else if (key == 38 && keystates[2]==true) { //Up arrow key
+	} else if ((key == 38 && keystates[2]==true) || (key == 87 && keystates[2] == true)) { //Up arrow key
 		player.vel[1] += 1;
 		keystates[2] = false;
-	} else if (key == 40 && keystates[3]==true) { //Down arrow key
+	} else if ((key == 40 && keystates[3]==true) || (key == 83 && keystates[3] == true)) { //Down arrow key
 		player.vel[1] -= 1;
 		keystates[3] = false;
 	}
@@ -125,7 +139,7 @@ function keyUp(event) {
 
 //MAP
 
-function Map(width,height,trees=[]) { // width: int, height: int, trees: Tree[]
+function Map(width,height,trees=[new Tree([1000, 1000], 300)]) { // width: int, height: int, trees: Tree[]
 	this.width = width;
 	this.height = height;
 	this.trees = trees;
@@ -163,12 +177,39 @@ Map.prototype.drawObjects = function() {
 function Tree(pos,size) {
 	this.pos = pos;
 	this.size = size;
+	this.points = Math.round((Math.random() * 4) + 7);
 }
 
 Tree.prototype.draw = function() {
-	if (withinScreen(this.pos,this.size,this.size/2)) { //Only draw tree if part of it can be seen by the user
-		ctx.fillStyle = "#00b300";
-		ctx.fillRect(boardXToCanvasX(this.pos[0])-this.size/2, boardYToCanvasY(this.pos[1])-this.size/4, this.size, this.size/2);
+	if (withinScreen(this.pos,this.size,this.size)) { //Only draw tree if part of it can be seen by the user
+		let relative = 1;
+		for (let y = 1; y <= 3; y++) {
+			ctx.beginPath();
+			let startingX = boardXToCanvasX(this.pos[0]);
+			let startingY = boardYToCanvasY(this.pos[1]);
+			let moveX = startingX;
+			let moveY = startingY - this.size * 0.8 * (relative - 0.2);
+			let shift = Math.PI/this.points;
+			let totalRotation = shift;
+			ctx.moveTo(moveX, moveY);
+			for (let x = 0; x <= this.points; x++) {
+				moveX = startingX + Math.cos(totalRotation) * this.size * relative;
+				moveY = startingY + Math.sin(totalRotation) * this.size * relative;
+				ctx.lineTo(moveX, moveY);
+				totalRotation += shift;
+				moveX = startingX + Math.cos(totalRotation) * this.size * 0.8 * relative;
+				moveY = startingY + Math.sin(totalRotation) * this.size * 0.8 * relative;
+				ctx.lineTo(moveX, moveY);
+				totalRotation += shift;
+			}
+			ctx.closePath();
+			ctx.lineWidth = 20;
+			ctx.strokeStyle = "black";
+			ctx.stroke();
+			ctx.fillStyle = "green";
+			ctx.fill();
+			relative -= 0.3
+		}
 	}
 }
 
@@ -181,13 +222,72 @@ function Player(pos,radius,speed) {
 	this.speed = speed;
 	this.minions = [];
 	this.resources = [0];//Wood
+	this.color = "#ffcc00";
+	this.rotation;
 }
 
 Player.prototype.draw = function() {
+	let bodyBorderWidth = 20;
+	let handSizeRatio = 0.3;
+	//calculate rotation
+	let angleLeft = (Math.atan(Math.abs(canvas.width/2 - mouseLocation[0])/Math.abs(canvas.height/2 - mouseLocation[1])) - (0.3 * Math.PI));
+	let angleRight = angleLeft + (0.6 * Math.PI);
+	//draw the body with a border of black
 	ctx.beginPath();
-	ctx.fillStyle = "#ffcc00";
 	ctx.arc(canvas.width/2,canvas.height/2,this.radius,0,2*Math.PI);
+	ctx.closePath();
+	ctx.lineWidth = bodyBorderWidth;
+	ctx.strokeStyle = "black";
+	ctx.stroke();
+	ctx.fillStyle = this.color;
 	ctx.fill();
+	
+	//draw the hands
+	ctx.beginPath();
+	ctx.fillStyle = this.color;
+	if (mouseLocation[0] >= canvas.width/2 && mouseLocation[1] <= canvas.height/2) {
+		ctx.arc(canvas.width/2 + (Math.sin(angleLeft) * this.radius), canvas.height/2 - (Math.cos(angleLeft) * this.radius), this.radius * handSizeRatio, 0, 2*Math.PI);
+		ctx.closePath();
+		ctx.strokeStyle = "black";
+		ctx.lineWidth = bodyBorderWidth;
+		ctx.stroke();
+		ctx.fill();
+		ctx.beginPath();
+		ctx.arc(canvas.width/2 + (Math.sin(angleRight) * this.radius), canvas.height/2 - (Math.cos(angleRight) * this.radius), this.radius * handSizeRatio, 0, 2*Math.PI);	
+	} else if (mouseLocation[0] >= canvas.width/2 && mouseLocation[1] >= canvas.height/2) {
+		ctx.arc(canvas.width/2 + (Math.sin(angleLeft) * this.radius), canvas.height/2 + (Math.cos(angleLeft) * this.radius), this.radius * handSizeRatio, 0, 2*Math.PI);
+		ctx.closePath();
+		ctx.strokeStyle = "black";
+		ctx.lineWidth = bodyBorderWidth;
+		ctx.stroke();
+		ctx.fill();
+		ctx.beginPath();
+		ctx.arc(canvas.width/2 + (Math.sin(angleRight) * this.radius), canvas.height/2 + (Math.cos(angleRight) * this.radius), this.radius * handSizeRatio, 0, 2*Math.PI);
+	} else if (mouseLocation[0] <= canvas.width/2 && mouseLocation[1] >= canvas.height/2) {
+		ctx.arc(canvas.width/2 - (Math.sin(angleLeft) * this.radius), canvas.height/2 + (Math.cos(angleLeft) * this.radius), this.radius * handSizeRatio, 0, 2*Math.PI);
+		ctx.closePath();
+		ctx.strokeStyle = "black";
+		ctx.lineWidth = bodyBorderWidth;
+		ctx.stroke();
+		ctx.fill();
+		ctx.beginPath();
+		ctx.arc(canvas.width/2 - (Math.sin(angleRight) * this.radius), canvas.height/2 + (Math.cos(angleRight) * this.radius), this.radius * handSizeRatio, 0, 2*Math.PI);
+	} else if (mouseLocation[0] <= canvas.width/2 && mouseLocation[1] <= canvas.height/2) {
+		ctx.arc(canvas.width/2 - (Math.sin(angleLeft) * this.radius), canvas.height/2 - (Math.cos(angleLeft) * this.radius), this.radius * handSizeRatio, 0, 2*Math.PI);
+		ctx.closePath();
+		ctx.strokeStyle = "black";
+		ctx.lineWidth = bodyBorderWidth;
+		ctx.stroke();
+		ctx.fill();
+		ctx.beginPath();
+		ctx.arc(canvas.width/2 - (Math.sin(angleRight) * this.radius), canvas.height/2 - (Math.cos(angleRight) * this.radius), this.radius * handSizeRatio, 0, 2*Math.PI);
+	}
+	ctx.strokeStyle = "black";
+	ctx.lineWidth = bodyBorderWidth;
+	ctx.stroke();
+	ctx.fill();
+	
+	//draw the player's minions
 	for (let i=0;i<this.minions.length;i++) {
 		this.minions[i].move(i);
 		this.minions[i].draw();
@@ -221,7 +321,11 @@ function Minion(pos,color,radius=minionRadius) {
 Minion.prototype.draw = function() {
 	if (withinScreen(this.pos,this.radius*2,this.radius*2)) {
 		ctx.beginPath();
-		ctx.fillStyle = this.color;
+		ctx.fillStyle = "black";
+		ctx.arc(boardXToCanvasX(this.pos[0]),boardYToCanvasY(this.pos[1]),this.radius + 5,0,2*Math.PI);
+		ctx.fill();
+		ctx.beginPath();
+		ctx.fillStyle = "#1a75ff";
 		ctx.arc(boardXToCanvasX(this.pos[0]),boardYToCanvasY(this.pos[1]),this.radius,0,2*Math.PI);
 		ctx.fill();
 	}
@@ -279,6 +383,6 @@ function draw() {
 	drawStats();
 }
 
-player.minions = [new Minion([980,920],"orange"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([980,920],"orange"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([980,920],"orange"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([980,920],"orange"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue")];
+//player.minions = [new Minion([980,920],"orange"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([980,920],"orange"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([980,920],"orange"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([980,920],"orange"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue"),new Minion([1020,880],"blue")];
 
 setInterval(draw,15);//Close enough to 16.666 seconds, 1000/60
